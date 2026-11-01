@@ -1,5 +1,8 @@
 package nexus.io.tio.boot.cloud.nacos;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,7 +21,7 @@ public class NacosRegistrationListener implements ServerListener {
   private static final Logger log = LoggerFactory.getLogger(NacosRegistrationListener.class);
 
   private final ServiceRegistry registry;
-  private volatile ServiceInstance registered;
+  private final List<ServiceInstance> registered = new ArrayList<>();
 
   public NacosRegistrationListener(ServiceRegistry registry) {
     this.registry = registry;
@@ -30,32 +33,41 @@ public class NacosRegistrationListener implements ServerListener {
 
   @Override
   public void afterStarted(Class<?>[] primarySources, String[] args, Context context) {
-    String serviceName = NacosProperties.serviceName();
-    if (serviceName == null || serviceName.trim().isEmpty()) {
+    List<String> serviceNames = NacosProperties.serviceNames();
+    if (serviceNames.isEmpty()) {
       throw new IllegalStateException("Set app.name or nacos.discovery.service to register with Nacos");
     }
     int port = EnvUtils.getInt(NacosProperties.DISCOVERY_PORT, context.getPort());
-    ServiceInstance instance = new ServiceInstance(serviceName, NacosProperties.registerIp(), port);
-    instance.setWeight(Double.parseDouble(EnvUtils.get(NacosProperties.DISCOVERY_WEIGHT, "1")));
-    instance.getMetadata().putAll(NacosProperties.metadata());
-    registry.register(instance);
-    registered = instance;
-    CloudContext.setLocalInstance(instance);
-    log.info("registered {} to nacos {} as {}:{}", serviceName, NacosProperties.serverAddr(), instance.getHost(), port);
+    String ip = NacosProperties.registerIp();
+    for (String serviceName : serviceNames) {
+      ServiceInstance instance = new ServiceInstance(serviceName, ip, port);
+      instance.setWeight(Double.parseDouble(EnvUtils.get(NacosProperties.DISCOVERY_WEIGHT, "1")));
+      instance.getMetadata().putAll(NacosProperties.metadata());
+      registry.register(instance);
+      synchronized (registered) {
+        registered.add(instance);
+      }
+      if (CloudContext.getLocalInstance() == null) {
+        CloudContext.setLocalInstance(instance);
+      }
+      log.info("registered {} to nacos {} as {}:{}", serviceName, NacosProperties.serverAddr(), ip, port);
+    }
   }
 
   @Override
   public void beforeStop() {
-    ServiceInstance instance = registered;
-    if (instance == null) {
-      return;
+    List<ServiceInstance> instances;
+    synchronized (registered) {
+      instances = new ArrayList<>(registered);
+      registered.clear();
     }
-    registered = null;
-    try {
-      registry.deregister(instance);
-      log.info("deregistered {} from nacos", instance);
-    } catch (Exception e) {
-      log.error("deregister {} failed: {}", instance, e.getMessage());
+    for (ServiceInstance instance : instances) {
+      try {
+        registry.deregister(instance);
+        log.info("deregistered {} from nacos", instance);
+      } catch (Exception e) {
+        log.error("deregister {} failed: {}", instance, e.getMessage());
+      }
     }
   }
 

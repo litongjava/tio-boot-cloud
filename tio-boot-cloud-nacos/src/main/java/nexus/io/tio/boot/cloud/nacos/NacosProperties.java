@@ -38,6 +38,7 @@ public class NacosProperties {
   public static final String DISCOVERY_ENABLED = "nacos.discovery.enabled";
   public static final String DISCOVERY_REGISTER_ENABLED = "nacos.discovery.register-enabled";
   public static final String DISCOVERY_SERVICE = "nacos.discovery.service";
+  public static final String DISCOVERY_EXTRA_SERVICES = "nacos.discovery.extra-services";
   public static final String DISCOVERY_GROUP = "nacos.discovery.group";
   public static final String DISCOVERY_IP = "nacos.discovery.ip";
   public static final String DISCOVERY_PORT = "nacos.discovery.port";
@@ -80,6 +81,29 @@ public class NacosProperties {
       name = EnvUtils.get("app.name");
     }
     return name;
+  }
+
+  /**
+   * @return the service name followed by {@code nacos.discovery.extra-services}
+   *         (comma separated). One process can register under several names, for
+   *         example while one application still serves several services that
+   *         will be split later.
+   */
+  public static List<String> serviceNames() {
+    List<String> names = new ArrayList<>();
+    String main = serviceName();
+    if (main != null && !main.trim().isEmpty()) {
+      names.add(main.trim());
+    }
+    String extra = EnvUtils.get(DISCOVERY_EXTRA_SERVICES);
+    if (extra != null) {
+      for (String name : extra.split(",")) {
+        if (!name.trim().isEmpty() && !names.contains(name.trim())) {
+          names.add(name.trim());
+        }
+      }
+    }
+    return names;
   }
 
   public static List<String> dataIds() {

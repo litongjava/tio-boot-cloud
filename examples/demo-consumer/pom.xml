@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>nexus.io</groupId>
+    <artifactId>tio-boot-cloud-examples</artifactId>
+    <version>1.0.0</version>
+  </parent>
+  <artifactId>demo-consumer</artifactId>
+
+  <properties>
+    <main.class>nexus.io.tio.boot.cloud.demo.consumer.ConsumerApp</main.class>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>nexus.io</groupId>
+      <artifactId>tio-boot-cloud-nacos</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>nexus.io</groupId>
+      <artifactId>jfinal-aop</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+    </dependency>
+  </dependencies>
+</project>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>nexus.io</groupId>
+    <artifactId>tio-boot-cloud</artifactId>
+    <version>${revision}</version>
+  </parent>
+  <artifactId>tio-boot-cloud-nacos</artifactId>
+  <name>${project.artifactId}</name>
+  <description>Nacos service registration, discovery and configuration for tio-boot</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>nexus.io</groupId>
+      <artifactId>tio-boot-cloud-commons</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.alibaba.nacos</groupId>
+      <artifactId>nacos-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+    </dependency>
+  </dependencies>
+</project>

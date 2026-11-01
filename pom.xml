@@ -12,6 +12,7 @@
 
   <modules>
     <module>tio-boot-cloud-commons</module>
+    <module>tio-boot-cloud-nacos</module>
   </modules>
 
   <properties>

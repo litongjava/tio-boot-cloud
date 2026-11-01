@@ -13,6 +13,7 @@
   <modules>
     <module>tio-boot-cloud-commons</module>
     <module>tio-boot-cloud-nacos</module>
+    <module>tio-boot-cloud-gateway</module>
   </modules>
 
   <properties>

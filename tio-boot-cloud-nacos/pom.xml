@@ -20,6 +20,11 @@
       <groupId>com.alibaba.nacos</groupId>
       <artifactId>nacos-client</artifactId>
     </dependency>
+    <!-- nacos-client needs a recent jackson-core; declared here so older copies brought by other libraries do not win -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+    </dependency>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>

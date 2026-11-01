@@ -18,8 +18,6 @@ import nexus.io.tio.utils.environment.EnvUtils;
  *
  * <pre>
  * public static void main(String[] args) {
- *   // optional: pull configuration before startup so it can also set server.port
- *   TioBootNacos.loadConfig(args);
  *   TioApplication.run(App.class, () -&gt; {
  *     TioBootNacos.start();
  *     // routes ...
@@ -27,9 +25,11 @@ import nexus.io.tio.utils.environment.EnvUtils;
  * }
  * </pre>
  *
- * {@link #start()} loads the configuration (if not loaded yet), makes
- * {@code CloudContext} discover services through Nacos and registers the
- * application once the server is listening.
+ * The configuration ({@code nacos.config.data-ids}) is loaded automatically
+ * while tio-boot starts, before server settings are read, so remote values can
+ * also set server.port. {@link #start()} makes {@code CloudContext} discover
+ * services through Nacos and registers the application once the server is
+ * listening.
  */
 public class TioBootNacos {
   private static final Logger log = LoggerFactory.getLogger(TioBootNacos.class);
@@ -37,15 +37,6 @@ public class TioBootNacos {
   private static volatile NamingService namingService;
   private static volatile ConfigService configService;
   private static volatile boolean configLoaded;
-
-  /**
-   * Loads {@code EnvUtils} with the command-line arguments, then the Nacos
-   * configuration. Call it before {@code TioApplication.run}.
-   */
-  public static synchronized void loadConfig(String[] args) {
-    EnvUtils.load(args);
-    loadConfig();
-  }
 
   /**
    * Loads {@code nacos.config.data-ids} once. Enabled when data ids are set,

@@ -40,7 +40,6 @@ curl -N localhost:18080/api/provider/demo/stream
 ```java
 public class App {
   public static void main(String[] args) {
-    TioBootNacos.loadConfig(args);
     TioApplication.run(App.class, () -> {
       TioBootNacos.start();
       // TioBootGateway.start(); // 网关应用再加这一行
@@ -48,6 +47,8 @@ public class App {
   }
 }
 ```
+
+`nacos.config.data-ids` 中的配置在启动时自动加载，早于 `server.port` 等服务配置的读取，所以 Nacos 中的配置同样可以设置端口。
 
 ```properties
 app.name=user-service

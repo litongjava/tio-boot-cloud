@@ -34,6 +34,7 @@ public class TioBootGateway {
   private static final RouteLocator routeLocator = new RouteLocator();
   private static final GatewayFilterRegistry filterRegistry = new GatewayFilterRegistry();
   private static volatile boolean started;
+  private static volatile GatewayHttpHandler httpHandler;
 
   public static synchronized void start() {
     if (started) {
@@ -59,13 +60,21 @@ public class TioBootGateway {
       }
     });
 
-    GatewayHttpHandler httpHandler = new GatewayHttpHandler(routeLocator, filterRegistry);
+    httpHandler = new GatewayHttpHandler(routeLocator, filterRegistry);
     HttpRequestRouter router = TioBootServer.me().getRequestRouter();
     router.any("/**", httpHandler);
     if (EnvUtils.getBoolean("gateway.websocket.enabled", true)) {
       TioBootServer.me().getWebSocketRouter().add("/**",
           new WebSocketProxyHandler(new GatewayWebSocketResolver(routeLocator, filterRegistry)));
     }
+  }
+
+  /**
+   * Sets the response for requests the upstream cannot answer. Call after
+   * {@link #start()}.
+   */
+  public static void setFallback(GatewayFallback fallback) {
+    httpHandler.setFallback(fallback);
   }
 
   public static void addGlobalFilter(GlobalFilter filter) {

@@ -5,6 +5,8 @@ import java.net.ConnectException;
 import java.net.NoRouteToHostException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -37,6 +39,11 @@ import okhttp3.OkHttpClient;
  * streamed AI answers</li>
  * <li>{@code gateway.http.max-attempts}: instances to try when one cannot be
  * reached, default 2</li>
+ * <li>{@code gateway.circuit-breaker.enabled}: default false</li>
+ * <li>{@code gateway.circuit-breaker.failure-threshold}: consecutive failures
+ * that open the breaker of a route, default 5</li>
+ * <li>{@code gateway.circuit-breaker.open-seconds}: how long it stays open,
+ * default 10</li>
  * </ul>
  */
 public class GatewayHttpHandler implements HttpRequestHandler {
@@ -46,6 +53,11 @@ public class GatewayHttpHandler implements HttpRequestHandler {
   private final GatewayFilterRegistry filterRegistry;
   private final OkHttpClient httpClient;
   private final int maxAttempts;
+  private final boolean breakerEnabled;
+  private final int failureThreshold;
+  private final long openMillis;
+  private final Map<String, GatewayCircuitBreaker> breakers = new ConcurrentHashMap<>();
+  private volatile GatewayFallback fallback;
 
   public GatewayHttpHandler(RouteLocator routeLocator, GatewayFilterRegistry filterRegistry) {
     this.routeLocator = routeLocator;
@@ -55,6 +67,17 @@ public class GatewayHttpHandler implements HttpRequestHandler {
         .readTimeout(EnvUtils.getInt("gateway.http.read-timeout", 300), TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build();
     this.maxAttempts = Math.max(1, EnvUtils.getInt("gateway.http.max-attempts", 2));
+    this.breakerEnabled = EnvUtils.getBoolean("gateway.circuit-breaker.enabled", false);
+    this.failureThreshold = Math.max(1, EnvUtils.getInt("gateway.circuit-breaker.failure-threshold", 5));
+    this.openMillis = TimeUnit.SECONDS.toMillis(Math.max(1, EnvUtils.getInt("gateway.circuit-breaker.open-seconds", 10)));
+  }
+
+  /**
+   * Sets the response for requests the upstream cannot answer. Without one the
+   * gateway answers with the status and a JSON message.
+   */
+  public void setFallback(GatewayFallback fallback) {
+    this.fallback = fallback;
   }
 
   @Override
@@ -71,15 +94,29 @@ public class GatewayHttpHandler implements HttpRequestHandler {
 
   private HttpResponse forward(GatewayExchange exchange) {
     Route route = exchange.getRoute();
+    if (!breakerEnabled) {
+      return send(exchange, null);
+    }
+    GatewayCircuitBreaker breaker = breakers.computeIfAbsent(route.getId(),
+        id -> new GatewayCircuitBreaker(failureThreshold, openMillis));
+    if (!breaker.tryAcquire()) {
+      return fail(exchange, 503, "Circuit breaker of route " + route.getId() + " is open");
+    }
+    return send(exchange, breaker);
+  }
+
+  private HttpResponse send(GatewayExchange exchange, GatewayCircuitBreaker breaker) {
+    Route route = exchange.getRoute();
     HttpRequest request = exchange.getRequest();
     HttpResponse response = exchange.getResponse();
     if (!route.isLoadBalanced()) {
       try {
-        return TioHttpProxy.forward(httpClient, route.getBaseUri() + exchange.getPathAndQuery(), request, response,
-            null);
+        HttpResponse result = TioHttpProxy.forward(httpClient, route.getBaseUri() + exchange.getPathAndQuery(), request, response, null);
+        succeeded(breaker);
+        return result;
       } catch (IOException e) {
         log.error("forward to {} failed: {}", route.getBaseUri(), e.getMessage());
-        return GatewayResponses.error(response, 502, "Bad Gateway");
+        return failed(exchange, breaker, 502, "Bad Gateway");
       }
     }
 
@@ -93,17 +130,41 @@ public class GatewayHttpHandler implements HttpRequestHandler {
       tried.add(instance);
       String url = instance.getUri() + exchange.getPathAndQuery();
       try {
-        return TioHttpProxy.forward(httpClient, url, request, response, null);
+        HttpResponse result = TioHttpProxy.forward(httpClient, url, request, response, null);
+        succeeded(breaker);
+        return result;
       } catch (ConnectException | NoRouteToHostException e) {
         log.warn("{} unreachable, trying another instance: {}", instance, e.getMessage());
       } catch (IOException e) {
         log.error("forward to {} failed: {}", url, e.getMessage());
-        return GatewayResponses.error(response, 502, "Bad Gateway");
+        return failed(exchange, breaker, 502, "Bad Gateway");
       }
     }
     if (tried.isEmpty()) {
-      return GatewayResponses.error(response, 503, "No available instance of " + route.getServiceId());
+      return failed(exchange, breaker, 503, "No available instance of " + route.getServiceId());
     }
-    return GatewayResponses.error(response, 502, "Bad Gateway");
+    return failed(exchange, breaker, 502, "Bad Gateway");
+  }
+
+  private void succeeded(GatewayCircuitBreaker breaker) {
+    if (breaker != null) {
+      breaker.onSuccess();
+    }
+  }
+
+  private HttpResponse failed(GatewayExchange exchange, GatewayCircuitBreaker breaker, int status, String message) {
+    if (breaker != null) {
+      breaker.onFailure();
+    }
+    return fail(exchange, status, message);
+  }
+
+  private HttpResponse fail(GatewayExchange exchange, int status, String message) {
+    GatewayFallback current = fallback;
+    // a streamed response has already sent its headers, nothing more can be answered
+    if (current == null || !exchange.getResponse().isSend()) {
+      return GatewayResponses.error(exchange.getResponse(), status, message);
+    }
+    return current.handle(exchange, status, message);
   }
 }

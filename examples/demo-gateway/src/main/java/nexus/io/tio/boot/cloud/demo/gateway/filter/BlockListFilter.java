@@ -15,7 +15,7 @@ public class BlockListFilter implements GlobalFilter {
 
   @Override
   public HttpResponse filter(GatewayExchange exchange, GatewayFilterChain chain) throws Exception {
-    String token = exchange.getRequestHeader("token");
+    String token = tokenOf(exchange);
     String blocked = EnvUtils.get("demo.blocked-tokens", "");
     if (token != null && !token.isEmpty() && ("," + blocked + ",").contains("," + token + ",")) {
       HttpResponse response = exchange.getResponse();
@@ -23,5 +23,17 @@ public class BlockListFilter implements GlobalFilter {
       return response.setJson(RespBodyVo.fail(401, "token blocked"));
     }
     return chain.filter(exchange);
+  }
+
+  /**
+   * Reads the token header first. Browsers cannot set headers on EventSource and
+   * WebSocket connections, so the token query parameter is accepted as well.
+   */
+  private String tokenOf(GatewayExchange exchange) {
+    String token = exchange.getRequestHeader("token");
+    if (token == null || token.isEmpty()) {
+      token = exchange.getRequest().getParam("token");
+    }
+    return token;
   }
 }
